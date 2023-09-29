@@ -4,7 +4,9 @@ use quote::quote;
 
 mod parse;
 ///
-/// #[bits(u32)]
+/// /// export 表示是否设置 A(u32) 中位置元素为 public。及
+/// A(pub u32)
+/// #[bits(u32, export)]
 /// struct A {
 ///     /// Punctuated<Expr, Token![,]>
 ///     #[field(pos=0..3, rw)]

@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
-use syn::{parse::Parse, DeriveInput, Ident, Visibility};
+use syn::{parse::Parse, DeriveInput, Ident, Token, Visibility};
 
 use crate::parse::field_info::BitStructFieldInfo;
 
@@ -74,6 +75,7 @@ pub struct BitField {
     pub ident: syn::Ident,
     pub vis: Visibility,
     pub allow_overlap: bool,
+    pub export: bool,
     pub doc: Vec<syn::Attribute>,
     pub inner_fields: Vec<InnerField>,
 }
@@ -97,6 +99,7 @@ impl BitField {
             ident: b_info.ident,
             vis: b_info.vis,
             allow_overlap: c_info.allow_overlap,
+            export: c_info.export,
             doc: b_info.doc,
             inner_fields,
         }
@@ -160,9 +163,14 @@ impl ToTokens for BitField {
         let base_ty = &self.base_ty;
         let vis = &self.vis;
         let doc = &self.doc;
+        let raw_vis = if self.export {
+            Visibility::Public(Token![pub](Span::call_site()))
+        } else {
+            Visibility::Inherited
+        };
         let top_scop = quote! {
             #(#doc)*
-            #vis struct #c_name(pub #base_ty);
+            #vis struct #c_name(#raw_vis #base_ty);
             impl ::bits::Bitalized for #c_name {
                 type BaseType = #base_ty;
             }
