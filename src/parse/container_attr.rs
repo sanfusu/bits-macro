@@ -30,7 +30,7 @@ impl Parse for BitContainerAttr {
             } else if attr.is_ident("export") {
                 export = true;
             } else {
-                return Err(syn::Error::new(attr.span(), "Unknown attr"));
+                return Err(syn::Error::new(attr.span(), "Unknow attribute"));
             }
         }
         if base_ty.is_none() {

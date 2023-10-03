@@ -119,14 +119,14 @@ impl ToTokens for BitField {
             let mut current = quote! {
                 #(#doc)*
                 #vis struct #field_name;
+                impl ::bits::Field for #field_name {
+                    type CacheType = #target_ty;
+                }
             };
             if (field.perm == BitFieldPerm::R || field.perm == BitFieldPerm::RW)
                 && field.need_try == false
             {
                 current.extend(quote! {
-                    impl ::bits::ReadableField<#c_name> for #field_name {
-                        type TargetType = #target_ty;
-                    }
                     impl ::bits::ReadField<#field_name> for #c_name {
                         fn read(&self, field: #field_name) -> #target_ty {
                             ::bits::Bits(self.0).read(#expr_range)
@@ -136,23 +136,18 @@ impl ToTokens for BitField {
             }
             if field.perm == BitFieldPerm::W || field.perm == BitFieldPerm::RW {
                 current.extend(quote! {
-                    impl ::bits::WriteableField<#c_name> for #field_name {
-                        type TargetType = #target_ty;
-                    }
                     impl ::bits::WriteField<#field_name> for #c_name {
                         fn write(&mut self, field: #field_name, v: #target_ty) {
-                            ::bits::BitsMut(&mut self.0).write(#expr_range, v);
+                            ::bits::BitsMut(&mut self.0).write(#expr_range, v.into());
                         }
                     }
                 });
             }
             if field.need_try == true {
                 current.extend(quote! {
-                    impl ::bits::TryReadableField<#c_name> for #field_name {
-                        type TargetType = #target_ty;
-                    }
                     impl ::bits::TryReadField<#field_name> for #c_name {
-                        fn try_read(&self, field: #field_name) -> Result<#target_ty, <#target_ty as TryFrom<Self::BaseType>>::Error> {
+                        type Error = <#target_ty as TryFrom<Self::BaseType>>::Error;
+                        fn try_read(&self, field: #field_name) -> Result<#target_ty, Self::Error> {
                             ::bits::Bits(self.0).read(#expr_range).try_into()
                         }
                     }
@@ -174,7 +169,10 @@ impl ToTokens for BitField {
             impl ::bits::Bitalized for #c_name {
                 type BaseType = #base_ty;
             }
-            #field_scop
+            pub mod field {
+                use super::*;
+                #field_scop
+            }
         }; // 这里我们不更改 ident 的命名风格，否则会对 rust-analyzer 等 lint 工具产生误导。
         tokens.extend(top_scop);
     }

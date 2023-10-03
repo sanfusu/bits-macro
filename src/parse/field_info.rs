@@ -50,12 +50,18 @@ impl TryFrom<syn::Field> for BitStructFieldInfo {
             .attrs
             .iter()
             .filter(|&attr| attr.path().is_ident("field"));
-        if clean_attr.clone().count() != 1 {
+        if clean_attr.clone().count() > 1 {
             let mut span = clean_attr.next().unwrap().span();
             for attr in clean_attr {
                 span = span.join(attr.span()).unwrap();
             }
             return Err(syn::Error::new(span, "Only one \"field\" attr is allowed"));
+        }
+        if clean_attr.clone().count() == 0 {
+            return Err(syn::Error::new(
+                field.span(),
+                "\"field\" attr must be presented",
+            ));
         }
         let field_attr = field
             .attrs

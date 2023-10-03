@@ -18,6 +18,7 @@ mod parse;
 ///     /// 私有字段，且默认权限为读写
 ///     field4: u32;
 /// }
+/// 当没有 export 的时候，需要自行实现读取函数
 #[proc_macro_attribute]
 pub fn bits(attr: TokenStream, item: TokenStream) -> TokenStream {
     let c_info = syn::parse::<BitContainerAttr>(attr);
