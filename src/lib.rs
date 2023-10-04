@@ -18,7 +18,22 @@ mod parse;
 ///     /// 私有字段，且默认权限为读写
 ///     field4: u32;
 /// }
-/// 当没有 export 的时候，需要自行实现读取函数
+/// 当没有 export 的时候，需要自行实现读取函数。
+/// TODO: 有时候，target type 不是一个具体的类型，可能是一个 impl trait。
+/// 比如 gpio 可能有 31 个，但是我们可复用的功能有限。一个功能可能只能在少数的 IO 口上使用。
+/// 如果采用 enum 的形式，我们是没有办法在编译时判断其是否可用。
+/// 那么采用 unit，然后实现各种 trait，
+/// 以及某一个 IO 口上的 to_int 功能可以提供更准确的适用性。
+/// ```
+/// pub struct MuxFunc1;
+/// pub struct MuxFunc2;
+/// // MuxFunc1 在 Gpio1 和 Gpio2 的数值代表可能不一样。
+/// impl ToGpio1Mux for MuxFunc1{}
+/// impl ToGpio2Mux for MuxFunc1{}
+/// // 只能传入 MuxFunc1。MuxFunc2 没有实现 ToGpio1Mux，也就是说 Gpio1 不能复用成 MuxFunc2.
+/// pub fn gpio1_set_mux(v: impl ToGPio1Mux) {
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn bits(attr: TokenStream, item: TokenStream) -> TokenStream {
     let c_info = syn::parse::<BitContainerAttr>(attr);
