@@ -1,19 +1,20 @@
-use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Token};
+use quote::quote;
+use syn::{
+    parse::Parse, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
+    PathArguments::AngleBracketed, Token,
+};
 
 pub struct BitContainerAttr {
     // 必须是 u8, u16, u32, u64,u128
     pub base_ty: syn::Path,
-    // 默认不允许重叠
-    pub allow_overlap: bool,
-    pub export: bool,
+    pub export: syn::Visibility,
 }
 impl Parse for BitContainerAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let input_ast = Punctuated::<syn::Path, Token![,]>::parse_separated_nonempty(input)?;
 
         let mut base_ty: Option<syn::Path> = None;
-        let mut allow_overlap: bool = false;
-        let mut export = false;
+        let mut export = syn::Visibility::Inherited;
         for ref attr in input_ast {
             if attr.is_ident("u8")
                 || attr.is_ident("u16")
@@ -25,23 +26,40 @@ impl Parse for BitContainerAttr {
                     return Err(syn::Error::new(attr.span(), "Duplicated container type"));
                 }
                 base_ty = Some(attr.clone());
-            } else if attr.is_ident("allow_overlap") {
-                allow_overlap = true;
-            } else if attr.is_ident("export") {
-                export = true;
-            } else {
-                return Err(syn::Error::new(attr.span(), "Unknow attribute"));
+            } else if let Some(seg) = attr.segments.first() {
+                if seg.ident.to_string() != "export" {
+                    return Err(syn::Error::new(attr.span(), "Unknow attribute"));
+                }
+                let path_segment = attr.segments.first().unwrap();
+                if path_segment.arguments.is_empty() {
+                    let public = syn::parse2::<Token![pub]>(quote! {pub}).unwrap();
+                    export = syn::Visibility::Public(public);
+                } else if let AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                    &path_segment.arguments
+                {
+                    if args.len() != 1 {
+                        return Err(syn::Error::new(
+                            args.span(),
+                            "Only one path can be in export",
+                        ));
+                    }
+                    let args = args.first().unwrap();
+                    if let syn::GenericArgument::Type(syn::Type::Path(path)) = args {
+                        export = syn::parse2::<syn::Visibility>(quote! {pub(in #path)}).unwrap();
+                    } else {
+                        return Err(syn::Error::new(
+                            args.span(),
+                            "export's argument must be a path",
+                        ));
+                    }
+                }
             }
         }
-        if base_ty.is_none() {
-            return Err(syn::Error::new(
+        Ok(BitContainerAttr {
+            base_ty: base_ty.ok_or(syn::Error::new(
                 input.span(),
                 "Container(base) type must be specified",
-            ));
-        }
-        Ok(BitContainerAttr {
-            base_ty: base_ty.unwrap(),
-            allow_overlap,
+            ))?,
             export,
         })
     }
