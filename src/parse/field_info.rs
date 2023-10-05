@@ -31,7 +31,7 @@ pub struct BitFieldAttr {
     pub need_try: bool,
     // 默认不可读，且不可写，需要显式说明。
     pub perm: BitFieldPerm,
-    pub expr_range: ExprRange,
+    pub expr: Expr,
 }
 impl TryFrom<syn::Field> for BitStructFieldInfo {
     type Error = syn::Error;
@@ -134,7 +134,7 @@ impl Parse for BitFieldAttr {
         }
         let mut perm = BitFieldPerm::R;
         let mut need_try = false;
-        let mut expr_range: Option<ExprRange> = None;
+        let mut expr: Option<Expr> = None;
         for ref item in attr_token {
             if let Expr::Path(ExprPath { path, .. }) = item {
                 if path.is_ident("R") {
@@ -154,7 +154,9 @@ impl Parse for BitFieldAttr {
                 }
             } else if let Expr::Range(range) = item {
                 let value: ExprRange = range.to_owned();
-                expr_range = Some(value);
+                expr = Some(syn::Expr::Range(value));
+            } else if let Expr::Lit(lit) = item {
+                expr = Some(syn::Expr::Lit(lit.to_owned()));
             } else {
                 return Err(syn::Error::new(item.span(), "Cannot parse as field attr"));
             }
@@ -162,7 +164,7 @@ impl Parse for BitFieldAttr {
         return Ok(Self {
             need_try,
             perm,
-            expr_range: expr_range.unwrap(),
+            expr: expr.unwrap(),
         });
     }
 }

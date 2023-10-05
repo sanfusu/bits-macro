@@ -62,7 +62,7 @@ impl Parse for BitStructInfo {
 
 pub struct InnerField {
     pub perm: BitFieldPerm,
-    pub pos: syn::ExprRange,
+    pub pos: syn::Expr,
     pub need_try: bool,
     pub target_ty: syn::Type,
     pub ident: syn::Ident,
@@ -83,7 +83,7 @@ impl BitField {
         for info in b_info.fields {
             let field = InnerField {
                 perm: info.attr.perm,
-                pos: info.attr.expr_range,
+                pos: info.attr.expr,
                 need_try: info.attr.need_try,
                 target_ty: info.target_ty,
                 ident: info.name,
@@ -162,10 +162,8 @@ impl ToTokens for BitField {
             impl ::bits::Bitalized for #c_name {
                 type BaseType = #base_ty;
             }
-            pub mod field {
-                use super::*;
-                #field_scop
-            }
+            use super::*;
+            #field_scop
         }; // 这里我们不更改 ident 的命名风格，否则会对 rust-analyzer 等 lint 工具产生误导。
         tokens.extend(top_scop);
     }
