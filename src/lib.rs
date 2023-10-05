@@ -4,9 +4,10 @@ use quote::quote;
 
 mod parse;
 ///
-/// /// export 表示是否设置 A(u32) 中位置元素为 public。及
-/// A(pub u32)
-/// #[bits(u32, export)]
+/// export 表示是否设置 A(u32) 中位置元素为 public。即 `A(pub(in module::path) u32)`
+/// 因为有时候我们并不希望 A 能够被随意的创建，所以需要该参数。
+/// ```
+/// #[bits(u32, export::<module::path>)]
 /// struct A {
 ///     /// Punctuated<Expr, Token![,]>
 ///     #[field(pos=0..3, rw)]
@@ -18,6 +19,7 @@ mod parse;
 ///     /// 私有字段，且默认权限为读写
 ///     field4: u32;
 /// }
+/// ```
 /// 当没有 export 的时候，需要自行实现读取函数。
 /// TODO: 有时候，target type 不是一个具体的类型，可能是一个 impl trait。
 /// 比如 gpio 可能有 31 个，但是我们可复用的功能有限。一个功能可能只能在少数的 IO 口上使用。
