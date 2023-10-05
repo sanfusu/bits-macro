@@ -3,21 +3,21 @@
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, DeriveInput, Ident, Visibility};
 
-use crate::parse::field_info::BitStructFieldInfo;
+use crate::parse::bits_field::BitsField;
 
-use self::{container_attr::BitContainerAttr, field_info::BitFieldPerm};
+use self::{bits_attr::BitStructAttr, bits_field::BitFieldPerm};
 
-pub mod container_attr;
-pub mod field_info;
+pub mod bits_attr;
+pub mod bits_field;
 
-pub struct BitStructInfo {
+pub struct BitStructItem {
     pub vis: Visibility,
-    pub ident: Ident,
-    pub fields: Vec<field_info::BitStructFieldInfo>,
+    pub name: Ident,
+    pub fields: Vec<bits_field::BitsField>,
     pub doc: Vec<syn::Attribute>,
 }
 
-impl Parse for BitStructInfo {
+impl Parse for BitStructItem {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let input_ast = DeriveInput::parse(input)?;
         if input_ast.generics.lt_token.is_some() {
@@ -46,84 +46,62 @@ impl Parse for BitStructInfo {
                 "Empty field is disallowed",
             ));
         }
-        let mut fields = Vec::<field_info::BitStructFieldInfo>::new();
+        let mut fields = Vec::<bits_field::BitsField>::new();
         for field in raw_fields {
-            let info = BitStructFieldInfo::try_from(field)?;
+            let info = BitsField::try_from(field)?;
             fields.push(info);
         }
-        Ok(BitStructInfo {
+        Ok(BitStructItem {
             vis: input_ast.vis,
-            ident: input_ast.ident,
+            name: input_ast.ident,
             fields,
             doc,
         })
     }
 }
 
-pub struct InnerField {
-    pub perm: BitFieldPerm,
-    pub pos: syn::Expr,
-    pub need_try: bool,
-    pub target_ty: syn::Type,
-    pub ident: syn::Ident,
-    pub vis: Visibility,
-    pub doc: Vec<syn::Attribute>,
+pub struct BitStruct {
+    pub item: BitStructItem,
+    pub attr: BitStructAttr,
 }
-pub struct BitField {
-    pub base_ty: syn::Path,
-    pub ident: syn::Ident,
-    pub vis: Visibility,
-    pub export: Visibility,
-    pub doc: Vec<syn::Attribute>,
-    pub inner_fields: Vec<InnerField>,
-}
-impl BitField {
-    pub fn new(c_info: BitContainerAttr, b_info: BitStructInfo) -> BitField {
-        let mut inner_fields: Vec<InnerField> = Vec::new();
-        for info in b_info.fields {
-            let field = InnerField {
-                perm: info.attr.perm,
-                pos: info.attr.expr,
-                need_try: info.attr.need_try,
-                target_ty: info.target_ty,
-                ident: info.name,
-                vis: info.vis,
-                doc: info.doc,
-            };
-            inner_fields.push(field);
-        }
-        BitField {
-            base_ty: c_info.base_ty,
-            ident: b_info.ident,
-            vis: b_info.vis,
-            export: c_info.export,
-            doc: b_info.doc,
-            inner_fields,
-        }
+impl BitStruct {
+    pub fn new(attr: BitStructAttr, item: BitStructItem) -> BitStruct {
+        BitStruct { attr, item }
     }
 }
-impl ToTokens for BitField {
+impl ToTokens for BitStruct {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let mut field_scop = quote! {};
-        let c_name = &self.ident;
+        let c_name = &self.item.name;
 
-        for field in &self.inner_fields {
-            let field_name = &field.ident;
-            let expr_range = &field.pos;
+        let base_ty = &self.attr.base_ty;
+        let raw_vis = &self.attr.export;
+        let vis = &self.item.vis;
+        let doc = &self.item.doc;
+        // 这里我们不更改 ident 的命名风格，否则会对 rust-analyzer 等 lint 工具产生误导。
+        tokens.extend(quote! {
+            #(#doc)*
+            #vis struct #c_name(#raw_vis #base_ty);
+            impl ::bits::Bitalized for #c_name {
+                type BaseType = #base_ty;
+            }
+        });
+        for field in &self.item.fields {
+            let field_name = &field.name;
+            let expr_range = &field.attr.expr;
             let target_ty = &field.target_ty;
             let doc = &field.doc;
             let vis = &field.vis;
-            let mut current = quote! {
+            tokens.extend(quote! {
                 #(#doc)*
                 #vis struct #field_name;
                 impl ::bits::Field for #field_name {
                     type CacheType = #target_ty;
                 }
-            };
-            if (field.perm == BitFieldPerm::R || field.perm == BitFieldPerm::RW)
-                && field.need_try == false
+            });
+            if (field.attr.perm == BitFieldPerm::R || field.attr.perm == BitFieldPerm::RW)
+                && field.attr.need_try == false
             {
-                current.extend(quote! {
+                tokens.extend(quote! {
                     impl ::bits::ReadField<#field_name> for #c_name {
                         fn read(&self, field: #field_name) -> #target_ty {
                             ::bits::Bits(self.0).read(#expr_range)
@@ -131,8 +109,8 @@ impl ToTokens for BitField {
                     }
                 });
             }
-            if field.perm == BitFieldPerm::W || field.perm == BitFieldPerm::RW {
-                current.extend(quote! {
+            if field.attr.perm == BitFieldPerm::W || field.attr.perm == BitFieldPerm::RW {
+                tokens.extend(quote! {
                     impl ::bits::WriteField<#field_name> for #c_name {
                         fn write(&mut self, field: #field_name, v: #target_ty) {
                             ::bits::BitsMut(&mut self.0).write(#expr_range, v.into());
@@ -140,8 +118,8 @@ impl ToTokens for BitField {
                     }
                 });
             }
-            if field.need_try == true {
-                current.extend(quote! {
+            if field.attr.need_try == true {
+                tokens.extend(quote! {
                     impl ::bits::TryReadField<#field_name> for #c_name {
                         type Error = <#target_ty as TryFrom<Self::BaseType>>::Error;
                         fn try_read(&self, field: #field_name) -> Result<#target_ty, Self::Error> {
@@ -150,21 +128,6 @@ impl ToTokens for BitField {
                     }
                 });
             }
-            field_scop.extend(current);
         }
-        let base_ty = &self.base_ty;
-        let vis = &self.vis;
-        let doc = &self.doc;
-        let raw_vis = &self.export;
-        let top_scop = quote! {
-            #(#doc)*
-            #vis struct #c_name(#raw_vis #base_ty);
-            impl ::bits::Bitalized for #c_name {
-                type BaseType = #base_ty;
-            }
-            use super::*;
-            #field_scop
-        }; // 这里我们不更改 ident 的命名风格，否则会对 rust-analyzer 等 lint 工具产生误导。
-        tokens.extend(top_scop);
     }
 }

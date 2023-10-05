@@ -1,4 +1,4 @@
-use parse::{container_attr::BitContainerAttr, BitField, BitStructInfo};
+use parse::{bits_attr::BitStructAttr, BitStruct, BitStructItem};
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -36,14 +36,14 @@ mod parse;
 /// ```
 #[proc_macro_attribute]
 pub fn bits(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let c_info = syn::parse::<BitContainerAttr>(attr);
+    let c_info = syn::parse::<BitStructAttr>(attr);
     if let Err(x) = c_info {
         return x.to_compile_error().into();
     }
-    let b_info = syn::parse::<BitStructInfo>(item);
+    let b_info = syn::parse::<BitStructItem>(item);
     if let Err(err) = b_info {
         return err.to_compile_error().into();
     }
-    let bit_field = BitField::new(c_info.unwrap(), b_info.unwrap());
+    let bit_field = BitStruct::new(c_info.unwrap(), b_info.unwrap());
     quote! (#bit_field).into()
 }

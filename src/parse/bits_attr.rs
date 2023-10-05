@@ -4,12 +4,12 @@ use syn::{
     PathArguments::AngleBracketed, Token,
 };
 
-pub struct BitContainerAttr {
+pub struct BitStructAttr {
     // 必须是 u8, u16, u32, u64,u128
     pub base_ty: syn::Path,
     pub export: syn::Visibility,
 }
-impl Parse for BitContainerAttr {
+impl Parse for BitStructAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let input_ast = Punctuated::<syn::Path, Token![,]>::parse_separated_nonempty(input)?;
 
@@ -55,7 +55,7 @@ impl Parse for BitContainerAttr {
                 }
             }
         }
-        Ok(BitContainerAttr {
+        Ok(BitStructAttr {
             base_ty: base_ty.ok_or(syn::Error::new(
                 input.span(),
                 "Container(base) type must be specified",

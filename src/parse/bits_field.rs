@@ -5,11 +5,11 @@ use syn::{
 
 // 一般会默认定义一个 unint 结构体，该结构体的类型名为字段名。
 // 该类型名可能会和 target_ty 冲突，因此需要放在一个单独的 mod 空间中。
-pub struct BitStructFieldInfo {
+pub struct BitsField {
     // 目标类型是可选的，如果为 none，则默认为 BitContainerInfo::base_ty
     pub target_ty: syn::Type,
     pub name: Ident,
-    pub attr: BitFieldAttr,
+    pub attr: BitsFieldAttr,
     pub vis: Visibility,
     pub doc: Vec<syn::Attribute>,
 }
@@ -20,20 +20,8 @@ pub enum BitFieldPerm {
     W,
     RW,
 }
-impl Default for BitFieldPerm {
-    fn default() -> Self {
-        BitFieldPerm::R
-    }
-}
 
-pub struct BitFieldAttr {
-    // 是否实现 TryReadableField，默认不实现
-    pub need_try: bool,
-    // 默认不可读，且不可写，需要显式说明。
-    pub perm: BitFieldPerm,
-    pub expr: Expr,
-}
-impl TryFrom<syn::Field> for BitStructFieldInfo {
+impl TryFrom<syn::Field> for BitsField {
     type Error = syn::Error;
 
     fn try_from(field: syn::Field) -> Result<Self, Self::Error> {
@@ -77,7 +65,7 @@ impl TryFrom<syn::Field> for BitStructFieldInfo {
             .into_iter()
             .filter(|x| x.path().is_ident("doc"))
             .collect();
-        Ok(BitStructFieldInfo {
+        Ok(BitsField {
             target_ty: field.ty.to_owned(),
             name: field.ident.to_owned().ok_or(syn::Error::new(
                 field.span().to_owned(),
@@ -89,7 +77,14 @@ impl TryFrom<syn::Field> for BitStructFieldInfo {
         })
     }
 }
-impl Parse for BitFieldAttr {
+pub struct BitsFieldAttr {
+    // 是否实现 TryReadableField，默认不实现
+    pub need_try: bool,
+    // 默认不可读，且不可写，需要显式说明。
+    pub perm: BitFieldPerm,
+    pub expr: Expr,
+}
+impl Parse for BitsFieldAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let attr_token = Punctuated::<Expr, Token![,]>::parse_separated_nonempty(input)?;
         if attr_token.is_empty() {
